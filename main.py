@@ -9,7 +9,7 @@ plt.rcParams['axes.unicode_minus'] = False
 # CSV 파일 읽기
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data.csv", skiprows=6)
+   df = pd.read_csv("data.csv", encoding="cp949", skiprows=6)
     df["일시"] = pd.to_datetime(df["일시"], format="%m-%d")
     return df
 
