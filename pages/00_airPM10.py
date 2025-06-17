@@ -1,53 +1,55 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 
+# 데이터 불러오기
 @st.cache_data
 def load_data():
-    try:
-        df = pd.read_csv("data.csv", encoding="cp949", skiprows=6)
-    except Exception:
-        try:
-            df = pd.read_csv("data.csv", encoding="utf-8-sig", skiprows=6)
-        except Exception:
-            df = pd.read_csv("data.csv", encoding="utf-8-sig")  # 마지막 시도
-    df["일시"] = pd.to_datetime(df["일시"], format="%m-%d", errors='coerce')
-    df = df.dropna(subset=["일시", "지점명"])  # 파싱 실패한 날짜 제거
+    df = pd.read_csv("미세먼지(PM10)+월별+도시별+대기오염도+.csv", encoding="cp949")
+    df = df.dropna(how="any")
+    df["측정일"] = pd.to_datetime(df["측정일"], format="%Y-%m")
     return df
 
 df = load_data()
 
-st.title("📊 우리나라 기후 평년값 시각화 (1991~2020)")
+st.title("🌫️ 도시별 미세먼지(PM10) 월별 오염도 시각화")
 
-regions = df["지점명"].dropna().unique()
-selected_region = st.selectbox("🌍 지역을 선택하세요", sorted(regions))
+# 도시 선택
+cities = df["도시"].unique()
+selected_cities = st.multiselect("도시를 선택하세요", options=sorted(cities), default=["서울"])
 
-filtered = df[df["지점명"] == selected_region].sort_values("일시")
-
-# 기온 그래프
-st.subheader(f"🌡️ {selected_region}의 일별 기온 변화")
-fig_temp = go.Figure()
-fig_temp.add_trace(go.Scatter(x=filtered["일시"], y=filtered["평균기온(°C)"], name="평균기온"))
-fig_temp.add_trace(go.Scatter(x=filtered["일시"], y=filtered["최고기온(°C)"], name="최고기온"))
-fig_temp.add_trace(go.Scatter(x=filtered["일시"], y=filtered["최저기온(°C)"], name="최저기온"))
-fig_temp.update_layout(title="기온 변화", xaxis_title="날짜", yaxis_title="°C", hovermode="x unified")
-st.plotly_chart(fig_temp, use_container_width=True)
-
-# 강수량 + 습도 그래프
-st.subheader("🌧️ 강수량 및 습도")
-fig_rain = go.Figure()
-fig_rain.add_trace(go.Bar(x=filtered["일시"], y=filtered["강수량(mm)"], name="강수량", marker_color="lightblue"))
-fig_rain.add_trace(go.Scatter(x=filtered["일시"], y=filtered["습도(%)"], name="습도", yaxis="y2", marker_color="green"))
-fig_rain.update_layout(
-    title="강수량 및 습도",
-    xaxis_title="날짜",
-    yaxis=dict(title="강수량 (mm)"),
-    yaxis2=dict(title="습도 (%)", overlaying="y", side="right"),
-    hovermode="x unified"
+# 기간 선택
+min_date = df["측정일"].min()
+max_date = df["측정일"].max()
+date_range = st.slider(
+    "기간을 선택하세요",
+    min_value=min_date,
+    max_value=max_date,
+    value=(min_date, max_date),
+    format="YYYY-MM"
 )
-st.plotly_chart(fig_rain, use_container_width=True)
+
+# 필터링
+filtered = df[
+    (df["도시"].isin(selected_cities)) &
+    (df["측정일"] >= date_range[0]) &
+    (df["측정일"] <= date_range[1])
+]
+
+# Plotly 그래프
+fig = px.line(
+    filtered,
+    x="측정일",
+    y="PM10",
+    color="도시",
+    markers=True,
+    title="도시별 월별 미세먼지(PM10) 농도 변화",
+    labels={"측정일": "측정일", "PM10": "미세먼지(PM10)", "도시": "도시"}
+)
+fig.update_layout(xaxis_title="측정일", yaxis_title="PM10 농도 (㎍/㎥)", hovermode="x unified")
+
+st.plotly_chart(fig, use_container_width=True)
 
 # 데이터 보기
 with st.expander("📄 원본 데이터 보기"):
     st.dataframe(filtered)
-
