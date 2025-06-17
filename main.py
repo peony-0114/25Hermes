@@ -1,43 +1,44 @@
 import streamlit as st
 import pandas as pd
-import pydeck as pdk
+import plotly.express as px
 
-CSV_URL = "air_pollution_with_coords.csv"  # 로컬 또는 GitHub raw 주소 가능
+# 제목
+st.title("우리나라 대기 온도 변화 시각화")
 
+# 데이터 로드
 @st.cache_data
 def load_data():
-    df = pd.read_csv(CSV_URL)
+    df = pd.read_csv("STCS_우리나라기후평년값_DD_20250617144904.csv", encoding="cp949")
+    df.columns = df.columns.str.strip()  # 혹시 모를 공백 제거
     return df
 
-def main():
-    st.title("🌍 Air Pollution Map (with Preloaded Coordinates)")
+df = load_data()
 
-    df = load_data()
+# 날짜 처리 (일자 컬럼이 있다면)
+if '일자' in df.columns:
+    df['일자'] = pd.to_datetime(df['일자'], errors='coerce')
 
-    aqi_filter = st.slider("Select AQI range to display", 0, 500, (0, 100))
-    filtered_df = df[(df["AQI Value"] >= aqi_filter[0]) & (df["AQI Value"] <= aqi_filter[1])]
+# 온도 관련 컬럼 찾기
+temp_cols = [col for col in df.columns if '기온' in col or '온도' in col]
 
-    st.pydeck_chart(pdk.Deck(
-        initial_view_state=pdk.ViewState(
-            latitude=20,
-            longitude=0,
-            zoom=1.5,
-            pitch=0,
-        ),
-        layers=[
-            pdk.Layer(
-                "ScatterplotLayer",
-                data=filtered_df,
-                get_position='[Longitude, Latitude]',
-                get_color='[255, 140, 0, 160]',
-                get_radius=50000,
-                pickable=True,
-            ),
-        ],
-        tooltip={"text": "City: {City}\nAQI: {AQI Value}\nCategory: {AQI Category}"}
-    ))
+# 지역 선택
+if '지점명' in df.columns:
+    regions = df['지점명'].unique()
+    selected_region = st.selectbox("지역 선택", regions)
+    df = df[df['지점명'] == selected_region]
 
-    st.dataframe(filtered_df[['Country', 'City', 'AQI Value', 'AQI Category']])
+# 온도 컬럼 선택
+if temp_cols:
+    selected_temp_col = st.selectbox("기온 데이터 선택", temp_cols)
+else:
+    st.error("기온 관련 컬럼을 찾을 수 없습니다.")
+    st.stop()
 
-if __name__ == "__main__":
-    main()
+# 시각화
+if '일자' in df.columns:
+    fig = px.line(df, x='일자', y=selected_temp_col,
+                  title=f"{selected_region}의 기온 변화",
+                  labels={selected_temp_col: "기온 (°C)", '일자': "날짜"})
+    st.plotly_chart(fig)
+else:
+    st.error("날짜 정보를 찾을 수 없습니다.")
