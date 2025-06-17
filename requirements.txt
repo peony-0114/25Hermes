@@ -5,4 +5,3 @@ pydeck
 geopy
 plotly
 matplotlib
-plotly.graph_objects
