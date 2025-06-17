@@ -2,54 +2,40 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 데이터 불러오기
+# 데이터 불러오기 및 정리
 @st.cache_data
 def load_data():
-    df = pd.read_csv("미세먼지(PM10)+월별+도시별+대기오염도+.csv", encoding="cp949")
-    df = df.dropna(how="any")
-    df["측정일"] = pd.to_datetime(df["측정일"], format="%Y-%m")
-    return df
+    df_raw = pd.read_csv("연도별 배출량.csv", encoding='cp949', skiprows=1)
+    df_raw = df_raw.rename(columns={df_raw.columns[0]: "연도"})
+    df_raw = df_raw.dropna(how='all')  # 전부 비어 있는 행 제거
+    df_raw["연도"] = df_raw["연도"].astype(str)
+
+    # 모든 수치형 열을 정수로 변환
+    for col in df_raw.columns[1:]:
+        df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce')
+    
+    return df_raw
 
 df = load_data()
 
-st.title("🌫️ 도시별 미세먼지(PM10) 월별 오염도 시각화")
+st.title("📊 연도별 대기오염물질 배출량 시각화")
 
-# 도시 선택
-cities = df["도시"].unique()
-selected_cities = st.multiselect("도시를 선택하세요", options=sorted(cities), default=["서울"])
+# 시각화할 오염물질 선택
+pollutants = df.columns[1:]
+selected = st.multiselect("📌 시각화할 오염물질을 선택하세요", pollutants, default=["PM-2.5", "NOx", "CO"])
 
-# 기간 선택
-min_date = df["측정일"].min()
-max_date = df["측정일"].max()
-date_range = st.slider(
-    "기간을 선택하세요",
-    min_value=min_date,
-    max_value=max_date,
-    value=(min_date, max_date),
-    format="YYYY-MM"
-)
+# 선택된 오염물질만 시각화
+if selected:
+    df_melted = df.melt(id_vars="연도", value_vars=selected, var_name="오염물질", value_name="배출량")
+    
+    fig = px.line(df_melted,
+                  x="연도", y="배출량", color="오염물질",
+                  markers=True,
+                  title="연도별 오염물질 배출량 (톤/yr)")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.warning("하나 이상의 오염물질을 선택해주세요.")
 
-# 필터링
-filtered = df[
-    (df["도시"].isin(selected_cities)) &
-    (df["측정일"] >= date_range[0]) &
-    (df["측정일"] <= date_range[1])
-]
-
-# Plotly 그래프
-fig = px.line(
-    filtered,
-    x="측정일",
-    y="PM10",
-    color="도시",
-    markers=True,
-    title="도시별 월별 미세먼지(PM10) 농도 변화",
-    labels={"측정일": "측정일", "PM10": "미세먼지(PM10)", "도시": "도시"}
-)
-fig.update_layout(xaxis_title="측정일", yaxis_title="PM10 농도 (㎍/㎥)", hovermode="x unified")
-
-st.plotly_chart(fig, use_container_width=True)
-
-# 데이터 보기
-with st.expander("📄 원본 데이터 보기"):
-    st.dataframe(filtered)
+# 원본 데이터 보기
+with st.expander("🔍 원본 데이터 보기"):
+    st.dataframe(df)
